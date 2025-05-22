@@ -1,0 +1,8 @@
+[package]
+name = "pokersim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.9.1"
+shuffle = "0.1.7"

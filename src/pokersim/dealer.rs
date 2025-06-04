@@ -4,19 +4,28 @@ use rand::rng;
 
 #[derive(Debug)]
 pub struct Dealer{
-    pub deck: Vec<u8>
+    card_idx: usize,
+    pub deck: Vec<u8>,
 }
 
 impl Dealer {
 
     pub fn new() -> Dealer {
         let deck: Vec<u8> = (1..=52).collect();
-        Self{ deck }
+        Self{ card_idx: 0, deck }
     }
 
     pub fn shuffle(&mut self) -> () {
+        self.card_idx = 0;
         let mut rng = rng();
         self.deck.shuffle(&mut rng);
+    }
+
+    pub fn next_card(&mut self) -> u8 {
+        if self.card_idx >= 51 {panic!("dealer is out of cards")}
+        let card: u8 = self.deck[self.card_idx];
+        self.card_idx += 1;
+        return card
     }
 
 }

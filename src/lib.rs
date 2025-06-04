@@ -1,2 +1,2 @@
-pub mod cards;
-pub mod players;
+pub mod pokersim;
+

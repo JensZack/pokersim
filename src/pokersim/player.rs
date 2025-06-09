@@ -32,7 +32,7 @@ pub trait HoldemPlayer {
     fn blind(&mut self, blind: Blind) -> u32;
     fn show(&self) -> [u8; 2];
     fn best_hand(&self, shared_cards: &Vec<u8>) -> [u8; 5];
-    fn play(&mut self, shared_cards: &Vec<u8>) -> Option<u32>;
+    fn play(&mut self, shared_cards: &Vec<u8>, minimum_call: u32) -> Option<u32>;
     fn bet(&mut self, shared_cards: &Vec<u8>, amount: u32) -> u32;
     fn fold(&mut self) -> ();
     fn assign_position(&mut self, player_position: usize, n_players: usize) -> ();
@@ -59,15 +59,14 @@ impl HoldemPlayer for Player {
             Some(hand) => return hand,
             None => panic!("No Cards"),
         }
-        
     }
-    fn play(&mut self, shared_cards: &Vec<u8>) -> Option<u32> {
+    fn play(&mut self, shared_cards: &Vec<u8>, minimum_call: u32) -> Option<u32> {
         if self.hand.is_none() {panic!("Player {} can't play, player has no cards", self.name)}
         if shared_cards.len() == 5 {
             self.fold();
             return None
         } else {
-            return Some(self.bet(shared_cards, 100))
+            return Some(self.bet(shared_cards, minimum_call))
         }
     }
     fn fold(&mut self) -> () {

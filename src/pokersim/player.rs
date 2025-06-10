@@ -4,6 +4,7 @@ pub struct Player {
     name: String,
     chips: u32,
     hand: Option<[u8; 2]>,
+    // position counts from 1, contains [player_position, n_players]
     position: Option<[usize; 2]>,
     pot_contribution: u32,
 }

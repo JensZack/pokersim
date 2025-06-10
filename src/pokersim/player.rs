@@ -25,6 +25,11 @@ pub struct Blind {
     pub btype: BlindType,
 }
 
+pub enum Play {
+    Bet(u32),
+    Fold,
+}
+
 
 pub trait HoldemPlayer {
     fn recieve_cards(&mut self, cards: [u8; 2]) -> ();
@@ -32,11 +37,11 @@ pub trait HoldemPlayer {
     fn blind(&mut self, blind: Blind) -> u32;
     fn show(&self) -> [u8; 2];
     fn best_hand(&self, shared_cards: &Vec<u8>) -> [u8; 5];
-    fn play(&mut self, shared_cards: &Vec<u8>, minimum_call: u32) -> Option<u32>;
-    fn bet(&mut self, shared_cards: &Vec<u8>, amount: u32) -> u32;
+    fn play(&mut self, shared_cards: &Vec<u8>, min_call: u32, max_bet: u32) -> Play;
+    fn bet(&mut self, shared_cards: &Vec<u8>, min_call: u32, max_bet: u32) -> u32;
     fn fold(&mut self) -> ();
     fn assign_position(&mut self, player_position: usize, n_players: usize) -> ();
-    fn end_round(&mut self) -> ();
+    fn end_round(&mut self, winnings: Option<u32>) -> ();
 }
 
 impl HoldemPlayer for Player {
@@ -48,11 +53,12 @@ impl HoldemPlayer for Player {
         self.chips -= blind.amount;
         return blind.amount
     }
-    fn bet(&mut self, _shared_cards: &Vec<u8>, amount: u32) -> u32 {
+    fn bet(&mut self, _shared_cards: &Vec<u8>, min_call: u32, _max_bet: u32) -> u32 {
+
         // bet of 0 == check
-        self.pot_contribution += amount;
-        self.chips -= amount;
-        return amount;
+        self.pot_contribution += min_call;
+        self.chips -= min_call;
+        return min_call;
     }
     fn show(&self) -> [u8; 2] {
         match self.hand {
@@ -60,13 +66,13 @@ impl HoldemPlayer for Player {
             None => panic!("No Cards"),
         }
     }
-    fn play(&mut self, shared_cards: &Vec<u8>, minimum_call: u32) -> Option<u32> {
+    fn play(&mut self, shared_cards: &Vec<u8>, min_call: u32, max_bet: u32) -> Play {
         if self.hand.is_none() {panic!("Player {} can't play, player has no cards", self.name)}
         if shared_cards.len() == 5 {
             self.fold();
-            return None
+            return Play::Fold;
         } else {
-            return Some(self.bet(shared_cards, minimum_call))
+            return Play::Bet(self.bet(shared_cards, min_call, max_bet))
         }
     }
     fn fold(&mut self) -> () {
@@ -81,10 +87,15 @@ impl HoldemPlayer for Player {
     fn assign_position(&mut self, player_position: usize, n_players: usize) -> () {
         self.position = Some([player_position, n_players]);
     }
-    fn end_round(&mut self) -> () {
+    fn end_round(&mut self, winnings: Option<u32>) -> () {
         self.pot_contribution = 0;
         self.position = None;
         self.hand = None;
+
+        match winnings {
+            Some(val) => self.chips += val,
+            None => (),
+        };
     }
 }
 

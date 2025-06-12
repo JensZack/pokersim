@@ -123,6 +123,28 @@ fn play_holdem_round<T: HoldemPlayer>(players: &mut Vec<&mut T>, round: &mut Rou
     panic!("max plays of {} reached in a single holdem round", max_plays);
 }
 
+fn end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, winning_players: &Vec<usize>) {
+    // distributes winnings to players, and calls end_round on all players
+    let n_winners: u32 = winning_players.len().try_into().unwrap();
+    
+    // randomly distribute the remainder
+    if round.pot_total() % n_winners != 0 {
+        panic!("Pot total: {} not divisible by n winners: {}", round.pot_total(), n_winners);
+    }
+    let winnings: u32 = round.pot_total() / n_winners;
+    for (i, player) in players.iter_mut().enumerate() {
+        match winning_players.contains(&i) {
+            true => player.end_round(Some(winnings)),
+            false => player.end_round(None),
+        }
+    }
+}
+
+
+fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, shared_cards: &Vec<u8>) {
+    
+}
+
 
 pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>, blinds: [u32; 2], ante: u32) {
     if blinds[0] > blinds[1] {panic!("Blinds must be passed in [Little, Big]")}
@@ -149,23 +171,57 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
     let mut round = Round::new(players.len(), Some(pre_bets));
 
     let mut shared_cards: Vec<u8> = vec![];
+    let mut winning_players: Vec<usize> = vec![];
 
     // Play a betting round with hole cards
     play_holdem_round(players, &mut round, &shared_cards);
-    if round.one_remaining_player().is_some() {}
+    match round.one_remaining_player() {
+        Some(played_idx) => {
+            winning_players.push(played_idx);
+            end_hand(&round, players, &winning_players);
+            return;
+        },
+        None => (),
+    };
 
     // Flop
     for _ in 1..3 { shared_cards.push(dealer.next_card()); }
     play_holdem_round(players, &mut round, &shared_cards);
+    match round.one_remaining_player() {
+        Some(played_idx) => {
+            winning_players.push(played_idx);
+            end_hand(&round, players, &winning_players);
+            return;
+        },
+        None => (),
+    };
 
     // Turn
     shared_cards.push(dealer.next_card());
     play_holdem_round(players, &mut round, &shared_cards);
+    match round.one_remaining_player() {
+        Some(played_idx) => {
+            winning_players.push(played_idx);
+            end_hand(&round, players, &winning_players);
+            return;
+        },
+        None => (),
+    };
     
     // River
     shared_cards.push(dealer.next_card());
     play_holdem_round(players, &mut round, &shared_cards);
+    match round.one_remaining_player() {
+        Some(played_idx) => {
+            winning_players.push(played_idx);
+            end_hand(&round, players, &winning_players);
+            return;
+        },
+        None => (),
+    };
 
+    // Remaining players compare cards
+    let _final_cards: [u8; 5] = shared_cards.as_slice().try_into().unwrap();
 }
 
 

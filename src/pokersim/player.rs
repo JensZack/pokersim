@@ -117,15 +117,15 @@ pub mod tests {
         player.recieve_cards(cards);
 
         let mut shared_cards: Vec<u8> = [2, 3, 4].to_vec();
-        let _play1 = player.play(&shared_cards);
+        let _play1 = player.play(&shared_cards, 0, 100);
         assert_eq!(player.chips, 9);
 
         shared_cards.push(5);
-        let _play2 = player.play(&shared_cards);
+        let _play2 = player.play(&shared_cards, 0, 100);
         assert_eq!(player.chips, 8);
 
         shared_cards.push(6);
-        let _play3 = player.play(&shared_cards);
+        let _play3 = player.play(&shared_cards, 0, 100);
         assert_eq!(player.chips, 8);
         assert!(player.hand.is_none());
     }

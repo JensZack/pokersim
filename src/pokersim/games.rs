@@ -111,11 +111,14 @@ fn play_holdem_round<T: HoldemPlayer>(players: &mut Vec<&mut T>, round: &mut Rou
     let mut round_ended: bool = false;
 
     for _ in 1..max_plays {
-        if round_ended {return};
+        if round_ended {
+            round.reset_round();
+            return;
+        };
 
         let min_bet = round.min_next_bet();
         let player_idx = round.next_player_idx();
-        let play = players[player_idx].play(shared_cards, min_bet);
+        let play = players[player_idx].play(shared_cards, min_bet, 100);
 
         round.next_play(play);
         round_ended = round.round_ended();

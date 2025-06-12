@@ -33,17 +33,75 @@ pub struct Card {
 }
 
 impl Card {
-    pub fn card_from_int(val: &u8) -> Card {
-        let card_value = CardValue::try_from(val.rem_euclid(13) + 1).unwrap();
-        let card_suit = CardSuit::try_from(val % 4 + 1).unwrap();
-        Card{ card_value, card_suit}
+    pub fn card_from_name(suit: &str, value: &str) -> Card {
+        let card_suit: CardSuit = match suit.to_lowercase().as_str() {
+            "spade" => CardSuit::SPADE,
+            "heart" => CardSuit::HEART,
+            "diamond" => CardSuit::DIAMOND,
+            "club" => CardSuit::CLUB,
+            _ => panic!("no CardSuit: {}", suit) 
+        };
+
+        let card_value: CardValue = match value.to_lowercase().as_str() {
+            "two" => CardValue::TWO,
+            "three" => CardValue::THREE,
+            "four" => CardValue::FOUR,
+            "five" => CardValue::FIVE,
+            "six" => CardValue::SIX,
+            "seven" => CardValue::SEVEN,
+            "eight" => CardValue::EIGHT,
+            "nine" => CardValue::NINE,
+            "ten" => CardValue::TEN,
+            "jack" => CardValue::JACK,
+            "queen" => CardValue::QUEEN,
+            "king" => CardValue::KING,
+            "ace" => CardValue::ACE,
+            _ => panic!("no CardValue: {}", value) 
+        };
+
+        Card{ card_value, card_suit }
     }
 
+    pub fn card_from_int(val: &u8) -> Card {
+        let v1: u8 = ((val - 1) % 13) + 1; 
+        let v2: u8 = ((val - 1) / 13) + 1; 
+        let card_value = CardValue::try_from(v1).unwrap();
+        let card_suit = CardSuit::try_from(v2).unwrap();
+        Card{ card_value, card_suit }
+    }
+
+    pub fn to_int(&self) -> u8 {
+        let card_val: u8;
+        match self.card_value {
+            CardValue::TWO => card_val = 1,
+            CardValue::THREE => card_val = 2,
+            CardValue::FOUR => card_val = 3,
+            CardValue::FIVE => card_val = 4,
+            CardValue::SIX => card_val = 5,
+            CardValue::SEVEN => card_val = 6,
+            CardValue::EIGHT => card_val = 7,
+            CardValue::NINE => card_val = 8,
+            CardValue::TEN => card_val = 9,
+            CardValue::JACK => card_val = 10,
+            CardValue::QUEEN => card_val = 11,
+            CardValue::KING => card_val = 12,
+            CardValue::ACE => card_val = 13,
+        };
+        
+        let suit_val: u8;
+        match self.card_suit {
+            CardSuit::SPADE => suit_val = 1,
+            CardSuit::HEART => suit_val = 2,
+            CardSuit::DIAMOND => suit_val = 3,
+            CardSuit::CLUB => suit_val = 4,
+        }
+        return card_val + ((suit_val - 1) * 13)
+    }
 }
 
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} of {:?}s", self.card_value, self.card_suit) // Write the point's coordinates
+        write!(f, "{:?} of {:?}S", self.card_value, self.card_suit) // Write the point's coordinates
     }
 }
 

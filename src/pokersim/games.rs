@@ -1,5 +1,6 @@
 use super::dealer::Dealer;
 use super::player::*;
+use super::hand_eval::score_hand;
 
 
 #[derive(Debug)]
@@ -144,8 +145,39 @@ fn end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, winning_p
 }
 
 
-fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, shared_cards: &Vec<u8>) {
-    
+fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, shared_cards: &[u8; 5]) {
+    let mut winning_players: Vec<usize> = vec![];
+    let mut max_score: f64 = 0.;
+    for idx in round.current_players.iter() {
+        let player_score: f64 = score_hand(&players[*idx].show(), &shared_cards);
+        if player_score > max_score {
+            winning_players = vec![*idx];
+            max_score = player_score;
+        }
+        else if player_score == max_score {
+            winning_players.push(*idx);
+        }
+    }
+
+    // TODO handling split pot
+    // for now: return the players pot contributions and then split the remaining pot
+
+    if winning_players.len() == 1 {
+        players[winning_players[0]].end_round(Some(round.pot_total()));
+    }
+    else {
+        let pot = round.pot_total();
+        let mut winners_contrib: u32 = 0;
+        for idx in winning_players.iter() {
+            winners_contrib += players[*idx].pot_contribution();
+        }
+        // potential to round down?
+        let pot_split: u32 = (pot - winners_contrib) / winning_players.len() as u32;
+        for idx in winning_players.iter() {
+            let player_contrib = players[*idx].pot_contribution();
+            players[*idx].end_round(Some(player_contrib + pot_split));
+        }
+    }
 }
 
 
@@ -224,7 +256,8 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
     };
 
     // Remaining players compare cards
-    let _final_cards: [u8; 5] = shared_cards.as_slice().try_into().unwrap();
+    let final_cards: [u8; 5] = shared_cards.as_slice().try_into().unwrap();
+    compare_and_end_hand(&round, players, &final_cards);
 }
 
 

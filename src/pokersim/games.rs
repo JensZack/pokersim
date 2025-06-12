@@ -93,9 +93,9 @@ impl Round {
         return self.bets.iter().sum();
     }
 
-    pub fn remaining_players(&self) -> Vec<usize> {
-        return self.current_players.iter().copied().collect();
-    }
+    // pub fn remaining_players(&self) -> Vec<usize> {
+    //     return self.current_players.iter().copied().collect();
+    // }
 
     pub fn one_remaining_player(&self) -> Option<usize> {
         match self.current_players.len() {

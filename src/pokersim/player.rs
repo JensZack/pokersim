@@ -38,8 +38,8 @@ pub trait HoldemPlayer {
     fn blind(&mut self, blind: Blind) -> u32;
     fn show(&self) -> [u8; 2];
     fn best_hand(&self, shared_cards: &Vec<u8>) -> [u8; 5];
-    fn play(&mut self, shared_cards: &Vec<u8>, min_call: u32, max_bet: u32) -> Play;
-    fn bet(&mut self, shared_cards: &Vec<u8>, min_call: u32, max_bet: u32) -> u32;
+    fn play(&mut self, shared_cards: &Vec<u8>, min_call: u32) -> Play;
+    fn bet(&mut self, shared_cards: &Vec<u8>, min_call: u32) -> u32;
     fn fold(&mut self) -> ();
     fn assign_position(&mut self, player_position: usize, n_players: usize) -> ();
     fn end_round(&mut self, winnings: Option<u32>) -> ();
@@ -55,7 +55,7 @@ impl HoldemPlayer for Player {
         self.chips -= blind.amount;
         return blind.amount
     }
-    fn bet(&mut self, _shared_cards: &Vec<u8>, min_call: u32, _max_bet: u32) -> u32 {
+    fn bet(&mut self, _shared_cards: &Vec<u8>, min_call: u32) -> u32 {
 
         // bet of 0 == check
         self.pot_contrib += min_call;
@@ -68,13 +68,13 @@ impl HoldemPlayer for Player {
             None => panic!("No Cards"),
         }
     }
-    fn play(&mut self, shared_cards: &Vec<u8>, min_call: u32, max_bet: u32) -> Play {
+    fn play(&mut self, shared_cards: &Vec<u8>, min_call: u32) -> Play {
         if self.hand.is_none() {panic!("Player {} can't play, player has no cards", self.name)}
         if shared_cards.len() == 5 {
             self.fold();
             return Play::Fold;
         } else {
-            return Play::Bet(self.bet(shared_cards, min_call, max_bet))
+            return Play::Bet(self.bet(shared_cards, min_call))
         }
     }
     fn fold(&mut self) -> () {
@@ -121,15 +121,15 @@ pub mod tests {
         player.recieve_cards(cards);
 
         let mut shared_cards: Vec<u8> = [2, 3, 4].to_vec();
-        let _play1 = player.play(&shared_cards, 0, 100);
+        let _play1 = player.play(&shared_cards, 0);
         assert_eq!(player.chips, 9);
 
         shared_cards.push(5);
-        let _play2 = player.play(&shared_cards, 0, 100);
+        let _play2 = player.play(&shared_cards, 0);
         assert_eq!(player.chips, 8);
 
         shared_cards.push(6);
-        let _play3 = player.play(&shared_cards, 0, 100);
+        let _play3 = player.play(&shared_cards, 0);
         assert_eq!(player.chips, 8);
         assert!(player.hand.is_none());
     }

@@ -6,12 +6,12 @@ pub struct Player {
     hand: Option<[u8; 2]>,
     // position counts from 1, contains [player_position, n_players]
     position: Option<[usize; 2]>,
-    pot_contribution: u32,
+    pot_contrib: u32,
 }
 
 impl Player {
     pub fn new(name: String, chips: u32) -> Player {
-        Self{ name, chips, hand: None, position: None, pot_contribution: 0 }
+        Self{ name, chips, hand: None, position: None, pot_contrib: 0 }
     }
 }
 
@@ -43,6 +43,7 @@ pub trait HoldemPlayer {
     fn fold(&mut self) -> ();
     fn assign_position(&mut self, player_position: usize, n_players: usize) -> ();
     fn end_round(&mut self, winnings: Option<u32>) -> ();
+    fn pot_contribution(&self) -> u32;
 }
 
 impl HoldemPlayer for Player {
@@ -57,7 +58,7 @@ impl HoldemPlayer for Player {
     fn bet(&mut self, _shared_cards: &Vec<u8>, min_call: u32, _max_bet: u32) -> u32 {
 
         // bet of 0 == check
-        self.pot_contribution += min_call;
+        self.pot_contrib += min_call;
         self.chips -= min_call;
         return min_call;
     }
@@ -89,7 +90,7 @@ impl HoldemPlayer for Player {
         self.position = Some([player_position, n_players]);
     }
     fn end_round(&mut self, winnings: Option<u32>) -> () {
-        self.pot_contribution = 0;
+        self.pot_contrib = 0;
         self.position = None;
         self.hand = None;
 
@@ -97,6 +98,9 @@ impl HoldemPlayer for Player {
             Some(val) => self.chips += val,
             None => (),
         };
+    }
+    fn pot_contribution(&self) -> u32 {
+        return self.pot_contrib;
     }
 }
 

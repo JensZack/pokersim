@@ -3,3 +3,5 @@ pub mod card_enums;
 pub mod dealer;
 pub mod games;
 pub mod hand_eval;
+pub mod coms;
+pub mod driver;

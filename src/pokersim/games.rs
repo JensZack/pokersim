@@ -1,3 +1,5 @@
+use crate::pokersim::coms::*;
+
 use super::dealer::Dealer;
 use super::player::*;
 use super::hand_eval::score_hand;
@@ -16,20 +18,24 @@ struct Round {
 impl Round {
     pub fn new(n_players: usize, initial_bets: Option<Vec<u32>>) -> Round {
         if n_players < 2 {panic!("Can't play a Round with less than 2 players")}
-        let current_players: Vec<usize> = (1..n_players).collect();
+        let current_players: Vec<usize> = (0..n_players).collect();
         match initial_bets {
             Some(bets) => Round{ bets, current_player_idx: 0, n_players, initial_bets_complete: false, n_plays: 0, current_players },
             None => Round{ bets: vec![0; n_players], current_player_idx: 0, n_players, initial_bets_complete: false, n_plays:0, current_players }
         }
         
     }
+
     fn next_player(&mut self, move_index: bool) {
         if self.current_players.is_empty() {panic!("Can't find next player, all have folded")}
 
         self.n_plays += 1;
         if self.n_plays == self.n_players {self.initial_bets_complete = true;}
 
-        if move_index {self.current_player_idx += 1;}
+        if move_index {
+            self.current_player_idx += 1;
+        }
+        self.current_player_idx = self.current_player_idx % self.current_players.len();
     }
 
     pub fn next_player_idx(&self) -> usize {
@@ -57,8 +63,8 @@ impl Round {
 
         if self.current_players.len() == 1 {return true};
 
-        let first = &self.current_players[0];
-        if self.initial_bets_complete & self.current_players.iter().all(|x| x == first){
+        let first = &self.bets[self.current_players[0]];
+        if self.initial_bets_complete & self.current_players.iter().all(|x| &self.bets[*x] == first){
             return true
         }
         else {
@@ -87,7 +93,7 @@ impl Round {
 
     pub fn min_next_bet(&self) -> u32 {
         let player_idx: usize = self.current_players[self.current_player_idx];
-        return self.bets[player_idx] - self.bets.iter().max().unwrap();
+        return self.bets.iter().max().unwrap() - self.bets[player_idx];
     }
 
     pub fn pot_total(&self) -> u32 { 
@@ -106,12 +112,12 @@ impl Round {
     }
 }
 
-fn play_holdem_round<T: HoldemPlayer>(players: &mut Vec<&mut T>, round: &mut Round, shared_cards: &Vec<u8>) {
+fn play_holdem_round<T: HoldemPlayer>(players: &mut Vec<T>, round: &mut Round, shared_cards: &Vec<u8>, turn: Turn) {
     // failsafe, panic if 1000 plays are made in a round.
     let max_plays: usize = 1_000;
     let mut round_ended: bool = false;
 
-    for _ in 1..max_plays {
+    for _ in 0..max_plays {
         if round_ended {
             round.reset_round();
             return;
@@ -119,7 +125,14 @@ fn play_holdem_round<T: HoldemPlayer>(players: &mut Vec<&mut T>, round: &mut Rou
 
         let min_bet = round.min_next_bet();
         let player_idx = round.next_player_idx();
-        let play = players[player_idx].play(shared_cards, min_bet);
+        let play = players[player_idx].play(
+            &round.current_players,
+            round.current_player_idx,
+            round.pot_total(),
+            min_bet,
+            shared_cards,
+            &turn,
+        );
 
         round.next_play(play);
         round_ended = round.round_ended();
@@ -127,7 +140,7 @@ fn play_holdem_round<T: HoldemPlayer>(players: &mut Vec<&mut T>, round: &mut Rou
     panic!("max plays of {} reached in a single holdem round", max_plays);
 }
 
-fn end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, winning_players: &Vec<usize>) {
+fn one_player_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<T>, winning_players: &Vec<usize>, zmq_socket: Option<&ZmqSocketReply>) {
     // distributes winnings to players, and calls end_round on all players
     let n_winners: u32 = winning_players.len().try_into().unwrap();
     
@@ -136,17 +149,37 @@ fn end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, winning_p
         panic!("Pot total: {} not divisible by n winners: {}", round.pot_total(), n_winners);
     }
     let winnings: u32 = round.pot_total() / n_winners;
+    let mut fitness: Vec<i32> = vec![];
+
     for (i, player) in players.iter_mut().enumerate() {
         match winning_players.contains(&i) {
-            true => player.end_round(Some(winnings)),
-            false => player.end_round(None),
+            true => {
+                player.end_round(Some(winnings));
+                fitness.push(winnings as i32 - round.bets[i] as i32);
+            },
+            false => {
+                player.end_round(None);
+                fitness.push(0 - round.bets[i] as i32);
+            },
         }
+    }
+
+    match zmq_socket {
+        Some(conn) => {
+            let header_msg: &str = "";
+            let msg = Message::EndOfRoundMessage { winnings: fitness };
+            //
+            // Returns a status message, ignore for now
+            let _reply = conn.send_recv_message(msg, header_msg);
+        },
+        None => (),
     }
 }
 
 
-fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T>, shared_cards: &[u8; 5]) {
+fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<T>, shared_cards: &[u8; 5], zmq_socket: Option<&ZmqSocketReply>) {
     let mut winning_players: Vec<usize> = vec![];
+    let mut fitness: Vec<i32> = round.bets.iter().map(|&x| 0 - x as i32).collect();
     let mut max_score: f64 = 0.;
     for idx in round.current_players.iter() {
         let player_score: f64 = score_hand(&players[*idx].show(), &shared_cards);
@@ -161,7 +194,6 @@ fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T
 
     // TODO handling split pot
     // for now: return the players pot contributions and then split the remaining pot
-
     if winning_players.len() == 1 {
         players[winning_players[0]].end_round(Some(round.pot_total()));
     }
@@ -176,13 +208,26 @@ fn compare_and_end_hand<T: HoldemPlayer>(round: &Round, players: &mut Vec<&mut T
         for idx in winning_players.iter() {
             let player_contrib = players[*idx].pot_contribution();
             players[*idx].end_round(Some(player_contrib + pot_split));
+            fitness[*idx] += pot_split as i32;
         }
+    }
+
+    match zmq_socket {
+        Some(conn) => {
+            let header_msg: &str = "";
+            let msg = Message::EndOfRoundMessage { winnings: fitness };
+            //
+            // Returns a status message, ignore for now
+            let _reply = conn.send_recv_message(msg, header_msg);
+        },
+        None => (),
     }
 }
 
 
-pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>, blinds: [u32; 2], ante: u32) {
+pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<T>, blinds: [u32; 2], ante: u32, zmq_socket: Option<&ZmqSocketReply>) {
     if blinds[0] > blinds[1] {panic!("Blinds must be passed in [Little, Big]")}
+    if players.len() < 2 {panic!("Can't play holdem with less than 2 players")}
 
     dealer.shuffle();
 
@@ -197,11 +242,13 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
     }
 
     players[1].blind(Blind{ amount: blinds[0], btype: BlindType::Little });
-    players[2].blind(Blind{ amount: blinds[1], btype: BlindType::Big });
+
+    let player_2: usize = players.len() % 2;
+    players[player_2].blind(Blind{ amount: blinds[1], btype: BlindType::Big });
 
     let mut pre_bets: Vec<u32> = vec![ante; n_players];
-    pre_bets[1] += blinds[0];
-    pre_bets[2] += blinds[1];
+    pre_bets[0] += blinds[0];
+    pre_bets[1] += blinds[1];
 
     let mut round = Round::new(players.len(), Some(pre_bets));
 
@@ -209,23 +256,23 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
     let mut winning_players: Vec<usize> = vec![];
 
     // Play a betting round with hole cards
-    play_holdem_round(players, &mut round, &shared_cards);
+    play_holdem_round(players, &mut round, &shared_cards, Turn::HOLE);
     match round.one_remaining_player() {
         Some(played_idx) => {
             winning_players.push(played_idx);
-            end_hand(&round, players, &winning_players);
+            one_player_end_hand(&round, players, &winning_players, zmq_socket);
             return;
         },
         None => (),
     };
 
     // Flop
-    for _ in 1..3 { shared_cards.push(dealer.next_card()); }
-    play_holdem_round(players, &mut round, &shared_cards);
+    for _ in 0..3 { shared_cards.push(dealer.next_card()); }
+    play_holdem_round(players, &mut round, &shared_cards, Turn::FLOP);
     match round.one_remaining_player() {
         Some(played_idx) => {
             winning_players.push(played_idx);
-            end_hand(&round, players, &winning_players);
+            one_player_end_hand(&round, players, &winning_players, zmq_socket);
             return;
         },
         None => (),
@@ -233,11 +280,11 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
 
     // Turn
     shared_cards.push(dealer.next_card());
-    play_holdem_round(players, &mut round, &shared_cards);
+    play_holdem_round(players, &mut round, &shared_cards, Turn::TURN);
     match round.one_remaining_player() {
         Some(played_idx) => {
             winning_players.push(played_idx);
-            end_hand(&round, players, &winning_players);
+            one_player_end_hand(&round, players, &winning_players, zmq_socket);
             return;
         },
         None => (),
@@ -245,11 +292,11 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
     
     // River
     shared_cards.push(dealer.next_card());
-    play_holdem_round(players, &mut round, &shared_cards);
+    play_holdem_round(players, &mut round, &shared_cards, Turn::RIVER);
     match round.one_remaining_player() {
         Some(played_idx) => {
             winning_players.push(played_idx);
-            end_hand(&round, players, &winning_players);
+            one_player_end_hand(&round, players, &winning_players, zmq_socket);
             return;
         },
         None => (),
@@ -257,21 +304,25 @@ pub fn holdem_nl<T: HoldemPlayer>(dealer: &mut Dealer, players: &mut Vec<&mut T>
 
     // Remaining players compare cards
     let final_cards: [u8; 5] = shared_cards.as_slice().try_into().unwrap();
-    compare_and_end_hand(&round, players, &final_cards);
+    compare_and_end_hand(&round, players, &final_cards, zmq_socket);
 }
 
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use serial_test::serial;
 
+    #[test]
+    #[serial]
     pub fn test_holdem_nl() {
+        let zmq_conn = zmq_init();
         let mut dealer = Dealer::new();
-        let mut player1 = Player::new("player1".to_string(), 100);
-        let mut player2 = Player::new("player2".to_string(), 100);
-        let mut players: Vec<&mut Player> = vec![&mut player1, &mut player2];
+        let player1 = Player::new("player1".to_string(), 100_000, Some(&zmq_conn));
+        let player2 = Player::new("player2".to_string(), 100_000, Some(&zmq_conn));
+        let mut players: Vec<Player> = vec![player1, player2];
         let blinds: [u32; 2] = [100, 200];
-        holdem_nl(&mut dealer, &mut players, blinds, 0);
+        holdem_nl(&mut dealer, &mut players, blinds, 0, Some(&zmq_conn));
     }
 
 }
